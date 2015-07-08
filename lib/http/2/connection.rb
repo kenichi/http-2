@@ -289,6 +289,20 @@ module HTTP2
             stream = activate_stream(id: pid, parent: parent)
             emit(:promise, stream)
             stream << frame
+
+          # The PRIORITY frame (type=0x2) specifies the sender-advised priority
+          # of a stream (Section 5.3).  It can be sent in any stream state,
+          # including idle or closed streams.
+          #
+          when :priority
+            stream = activate_stream(
+              id:         frame[:stream],
+              weight:     frame[:weight] || DEFAULT_WEIGHT,
+              dependency: frame[:stream_dependency] || 0,
+              exclusive:  frame[:exclusive] || false,
+            )
+            emit(:stream, stream)
+
           else
             if (stream = @streams[frame[:stream]])
               stream << frame
