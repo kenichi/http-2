@@ -574,4 +574,18 @@ module HTTP2
       fail Error.const_get(klass), msg
     end
   end
+
+  class UpgradeStream < Stream
+
+    def initialize(connection:, headers:, &block)
+      defaults = {weight: 16, dependency: 0, exclusive: false}
+      super(connection: connection, id: 1, **defaults)
+      yield self
+      emit(:headers, headers)
+      event(:half_closed_remote)
+      complete_transition(nil)
+    end
+
+  end
+
 end

@@ -378,15 +378,8 @@ module HTTP2
           fail ProtocolError, "Invalid stream ID (#{frame[:stream]})"
         end
 
-        (frame[:length] / 6).times do
-          id  = payload.read(2).unpack(UINT16).first
-          val = payload.read_uint32
+        frame[:payload] = Framer.frame_settings(frame[:length], payload)
 
-          # Unsupported or unrecognized settings MUST be ignored.
-          # Here we send it along.
-          name, _ = DEFINED_SETTINGS.find { |_name, v| v == id }
-          frame[:payload] << [name, val] if name
-        end
       when :push_promise
         frame[:promise_stream] = payload.read_uint32 & RBIT
         frame[:payload] = payload.read(frame[:length])
@@ -416,6 +409,25 @@ module HTTP2
       end
 
       frame
+    end
+
+    # sets +frame[:payload]+ to settings Array parsed from +payload+.
+    #
+    # @param length [Integer] frame length
+    # @param payload [String] read from buffer
+    #
+    def self.frame_settings(length, payload)
+      settings = []
+      (length / 6).times do
+        id  = payload.read(2).unpack(UINT16).first
+        val = payload.read_uint32
+
+        # Unsupported or unrecognized settings MUST be ignored.
+        # Here we send it along.
+        name, _ = DEFINED_SETTINGS.find { |_name, v| v == id }
+        settings << [name, val] if name
+      end
+      settings
     end
 
     private

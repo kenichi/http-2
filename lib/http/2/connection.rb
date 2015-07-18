@@ -101,6 +101,8 @@ module HTTP2
     # @param priority [Integer]
     # @param window [Integer]
     # @param parent [Stream]
+    # @param upgrade [Boolean]
+    # @param headers [Array]
     def new_stream(**args)
       fail ConnectionClosed if @state == :closed
       fail StreamLimitExceeded if @active_stream_count >= @remote_settings[:settings_max_concurrent_streams]
@@ -615,10 +617,18 @@ module HTTP2
     # @param priority [Integer]
     # @param window [Integer]
     # @param parent [Stream]
+    # @param upgrade [Boolean]
+    # @param headers [Array]
     def activate_stream(id: nil, **args)
       connection_error(msg: 'Stream ID already exists') if @streams.key?(id)
 
-      stream = Stream.new({ connection: self, id: id }.merge(args))
+      stream = if args.delete(:upgrade)
+                 UpgradeStream.new({ connection: self }.merge(args)) do |s|
+                   emit(:stream, s)
+                 end
+               else
+                 Stream.new({ connection: self, id: id }.merge(args))
+               end
 
       # Streams that are in the "open" state, or either of the "half closed"
       # states count toward the maximum number of streams that an endpoint is

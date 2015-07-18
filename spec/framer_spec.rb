@@ -1,4 +1,5 @@
 require 'helper'
+require 'base64'
 
 RSpec.describe HTTP2::Framer do
   let(:f) { Framer.new }
@@ -232,6 +233,21 @@ RSpec.describe HTTP2::Framer do
         buf.setbyte(2, 11) # change payload length
         f.parse(buf)
       end.to raise_error(ProtocolError, /Invalid settings payload length/)
+    end
+
+    context 'UPGRADE' do
+      let(:upgrade_settings) do
+        Buffer.new Base64.decode64 'AAMAAABkAAQAAP__'
+      end
+
+      let(:payload) do
+        [[ :settings_max_concurrent_streams, 100 ]]
+      end
+
+      it 'should parse decoded upgrade strings' do
+        parsed = Framer.frame_settings upgrade_settings.length, upgrade_settings
+        expect(parsed).to eq payload
+      end
     end
   end
 
