@@ -54,6 +54,8 @@ class UpgradeHandler
       # preface (Section 3.5) consisting of a SETTINGS frame (Section 6.5).
       # https://tools.ietf.org/html/rfc7540#section-3.2
       #
+      # TODO: something else seems to be sending this!
+      #
       buf = HTTP2::Buffer.new Base64.decode64(headers['HTTP2-Settings'])
       @conn.settings HTTP2::Framer.frame_settings(buf.length, buf)
 
@@ -88,6 +90,8 @@ loop do
 
   conn = HTTP2::Server.new
   conn.on(:frame) do |bytes|
+    # puts "called from:"
+    # puts caller.select {|x| x !~ /pry/}
     # puts "Writing bytes: #{bytes.unpack("H*").first}"
     sock.write bytes
   end
@@ -168,6 +172,7 @@ loop do
 
     rescue => e
       puts "Exception: #{e}, #{e.message} - closing socket."
+      puts e.backtrace
       sock.close
     end
   end

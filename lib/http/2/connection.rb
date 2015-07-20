@@ -621,14 +621,13 @@ module HTTP2
     # @param headers [Array]
     def activate_stream(id: nil, **args)
       connection_error(msg: 'Stream ID already exists') if @streams.key?(id)
+      stream, upgrade = nil, args.delete(:upgrade)
 
-      stream = if args.delete(:upgrade)
-                 UpgradeStream.new({ connection: self }.merge(args)) do |s|
-                   emit(:stream, s)
-                 end
-               else
-                 Stream.new({ connection: self, id: id }.merge(args))
-               end
+      if upgrade
+        stream = UpgradeStream.new({ connection: self }.merge(args))
+      else
+        stream = Stream.new({ connection: self, id: id }.merge(args))
+      end
 
       # Streams that are in the "open" state, or either of the "half closed"
       # states count toward the maximum number of streams that an endpoint is
@@ -639,6 +638,11 @@ module HTTP2
       stream.on(:frame,   &method(:send))
 
       @streams[id] = stream
+      if upgrade
+        emit(:stream, stream)
+        stream.complete_upgrade
+      end
+      stream
     end
 
     # Emit GOAWAY error indicating to peer that the connection is being

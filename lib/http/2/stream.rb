@@ -240,6 +240,14 @@ module HTTP2
     # `---------------------->|        |<----------------------'
     #                         +--------+
     #
+    #       send:   endpoint sends this frame
+    #       recv:   endpoint receives this frame
+    #
+    #       H:  HEADERS frame (with implied CONTINUATIONs)
+    #       PP: PUSH_PROMISE frame (with implied CONTINUATIONs)
+    #       ES: END_STREAM flag
+    #       R:  RST_STREAM frame
+    #
     def transition(frame, sending)
       case @state
 
@@ -577,11 +585,12 @@ module HTTP2
 
   class UpgradeStream < Stream
 
-    def initialize(connection:, headers:, &block)
-      defaults = {weight: 16, dependency: 0, exclusive: false}
-      super(connection: connection, id: 1, **defaults)
-      yield self
+    def initialize(connection:, headers:)
+      super(connection: connection, id: 1)
       emit(:headers, headers)
+    end
+
+    def complete_upgrade
       event(:half_closed_remote)
       complete_transition(nil)
     end
