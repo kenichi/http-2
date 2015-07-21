@@ -1,6 +1,7 @@
 require_relative 'helper'
 require 'http_parser'
 require 'base64'
+require 'pry'
 
 options = { port: 8080 }
 OptionParser.new do |opts|
@@ -132,12 +133,18 @@ loop do
       log.info 'client closed its end of the stream'
 
       response = nil
-      if req[':method'] == 'POST'
+      case req[':method']
+      when 'POST'
         log.info "Received POST request, payload: #{buffer}"
         response = "Hello HTTP 2.0! POST payload: #{buffer}"
-      else
+      when 'GET'
         log.info 'Received GET request'
         response = 'Hello HTTP 2.0! GET request'
+      when 'OPTIONS'
+        log.info 'Received OPTIONS request'
+        response = 'continue in h2c'
+      else
+        log.info req
       end
 
       stream.headers({
@@ -154,33 +161,38 @@ loop do
 
   uh = UpgradeHandler.new(conn, sock)
 
-  while !sock.closed? && !(sock.eof? rescue true) # rubocop:disable Style/RescueModifier
-    data = sock.readpartial(1024)
-    # puts "Received bytes: #{data.unpack("H*").first}"
+  # Thread.new do
+    while !sock.closed? && !(sock.eof? rescue true) # rubocop:disable Style/RescueModifier
+      puts "reading from socket..."
+      data = sock.readpartial(1024)
+      # puts "Received bytes: #{data.unpack("H*").first}"
 
-    begin
-      case
-      when !uh.parsing && !uh.complete
+      begin
+        destination = case
+                      when !uh.parsing && !uh.complete
 
-        if data.start_with?(*UpgradeHandler::VALID_UPGRADE_METHODS)
-          uh << data
-        else
-          uh.complete!
-          conn << data
-        end
+                        if data.start_with?(*UpgradeHandler::VALID_UPGRADE_METHODS)
+                          uh
+                        else
+                          uh.complete!
+                          conn
+                        end
 
-      when uh.parsing && !uh.complete
-        uh << data
+                      when uh.parsing && !uh.complete
+                        uh
 
-      when uh.complete
-        conn << data
+                      when uh.complete
+                        conn
 
+                      end
+
+        destination << data
+
+      rescue => e
+        puts "Exception: #{e}, #{e.message} - closing socket."
+        puts e.backtrace
+        sock.close
       end
-
-    rescue => e
-      puts "Exception: #{e}, #{e.message} - closing socket."
-      puts e.backtrace
-      sock.close
     end
-  end
+  # end
 end

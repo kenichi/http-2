@@ -1,3 +1,4 @@
+require 'pry'
 require 'helper'
 
 RSpec.describe HTTP2::Stream do
@@ -791,5 +792,24 @@ RSpec.describe HTTP2::Stream do
         end
       end
     end
+  end
+
+  context 'upgrade stream' do
+
+    it 'should emit headers on(:headers)' do
+      recv = nil
+      conn = HTTP2::Server.new
+      conn.on(:stream){|s| s.on(:headers){|h| recv = Hash[*h.flatten]}}
+      headers = {
+        ':scheme'    => 'http',
+        ':method'    => 'GET',
+        ':authority' => '127.0.0.1:80',
+        ':path'      => '/'
+      }
+      conn.new_stream upgrade: true, headers: headers.to_a
+
+      expect(recv).to eq headers
+    end
+
   end
 end

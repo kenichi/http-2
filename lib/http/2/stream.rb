@@ -587,10 +587,11 @@ module HTTP2
 
     def initialize(connection:, headers:)
       super(connection: connection, id: 1)
-      emit(:headers, headers)
+      @upgrade_headers = headers
     end
 
     def complete_upgrade
+      emit(:headers, @upgrade_headers)
       event(:half_closed_remote)
       complete_transition(nil)
     end
