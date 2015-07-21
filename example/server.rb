@@ -1,7 +1,6 @@
 require_relative 'helper'
 require 'http_parser'
 require 'base64'
-require 'pry'
 
 options = { port: 8080 }
 OptionParser.new do |opts|
@@ -54,11 +53,23 @@ class UpgradeHandler
       # preface (Section 3.5) consisting of a SETTINGS frame (Section 6.5).
       # https://tools.ietf.org/html/rfc7540#section-3.2
       #
-      # TODO: something else seems to be sending this!
-      #
       buf = HTTP2::Buffer.new Base64.decode64(headers['HTTP2-Settings'])
-      @conn.settings HTTP2::Framer.frame_settings(buf.length, buf)
+      settings = @conn.framer.generate type: :settings,
+                                       flags: [],
+                                       stream: 0,
+                                       payload: HTTP2::Framer.frame_settings(buf.length, buf)
 
+      # pretend this happened :)
+      #
+      @conn << HTTP2::CONNECTION_PREFACE_MAGIC
+
+      # fake it out with a full settings frame, built above from the
+      # HTTP2-Settings header value
+      #
+      @conn << settings
+
+      # still have to respond to the original req with stream 0
+      #
       h = {
         ':scheme'    => 'http',
         ':method'    => @parser.http_method,
@@ -90,8 +101,6 @@ loop do
 
   conn = HTTP2::Server.new
   conn.on(:frame) do |bytes|
-    # puts "called from:"
-    # puts caller.select {|x| x !~ /pry/}
     # puts "Writing bytes: #{bytes.unpack("H*").first}"
     sock.write bytes
   end
@@ -107,9 +116,7 @@ loop do
     req, buffer = {}, ''
 
     stream.on(:active) { log.info 'client opened new stream' }
-    stream.on(:close) do
-      log.info 'stream closed'
-    end
+    stream.on(:close) { log.info 'stream closed' }
 
     stream.on(:headers) do |h|
       req = Hash[*h.flatten]
