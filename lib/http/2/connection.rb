@@ -643,6 +643,9 @@ module HTTP2
       if upgrade
         emit(:stream, stream)
         stream.complete_upgrade
+
+        # client will send connection prefix "again" for further stream requests
+        @state = :waiting_magic
       end
       stream
     end

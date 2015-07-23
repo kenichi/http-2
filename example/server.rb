@@ -98,7 +98,7 @@ end
 
 loop do
   sock = server.accept
-  puts 'New TCP connection!'
+  puts "\n\nNew TCP connection!"
 
   conn = HTTP2::Server.new
   conn.on(:frame) do |bytes|
@@ -161,38 +161,35 @@ loop do
 
   uh = UpgradeHandler.new(conn, sock)
 
-  # Thread.new do
-    while !sock.closed? && !(sock.eof? rescue true) # rubocop:disable Style/RescueModifier
-      puts "reading from socket..."
-      data = sock.readpartial(1024)
-      # puts "Received bytes: #{data.unpack("H*").first}"
+  while !sock.closed? && !(sock.eof? rescue true) # rubocop:disable Style/RescueModifier
+    data = sock.readpartial(1024)
+    # puts "Received bytes: #{data.unpack("H*").first}"
 
-      begin
-        destination = case
-                      when !uh.parsing && !uh.complete
+    begin
+      destination = case
+                    when !uh.parsing && !uh.complete
 
-                        if data.start_with?(*UpgradeHandler::VALID_UPGRADE_METHODS)
-                          uh
-                        else
-                          uh.complete!
-                          conn
-                        end
-
-                      when uh.parsing && !uh.complete
+                      if data.start_with?(*UpgradeHandler::VALID_UPGRADE_METHODS)
                         uh
-
-                      when uh.complete
+                      else
+                        uh.complete!
                         conn
-
                       end
 
-        destination << data
+                    when uh.parsing && !uh.complete
+                      uh
 
-      rescue => e
-        puts "Exception: #{e}, #{e.message} - closing socket."
-        puts e.backtrace
-        sock.close
-      end
+                    when uh.complete
+                      conn
+
+                    end
+
+      destination << data
+
+    rescue => e
+      puts "Exception: #{e}, #{e.message} - closing socket."
+      puts e.backtrace
+      sock.close
     end
-  # end
+  end
 end
