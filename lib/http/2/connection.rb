@@ -46,7 +46,8 @@ module HTTP2
     include Emitter
     include Error
 
-    # Connection state (:new, :closed).
+    # Connection state (:waiting_magic, :waiting_connection_preface, :connected, :closed).
+    # initialized in subclasses
     attr_reader :state
 
     # Last connection error if connection is aborted.

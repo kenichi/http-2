@@ -583,13 +583,24 @@ module HTTP2
     end
   end
 
+  # specal stream case for upgrade stream 1 - must initiate response to
+  # upgraded request.
+  #
   class UpgradeStream < Stream
 
     def initialize(connection:, headers:)
+
+      # all default except id must be 1
+      #
       super(connection: connection, id: 1)
+
+      # stash this to "emit" later
+      #
       @upgrade_headers = headers
     end
 
+    # called after :stream event is emitted so that handlers are in place.
+    #
     def complete_upgrade
       emit(:headers, @upgrade_headers)
       event(:half_closed_remote)

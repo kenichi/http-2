@@ -1,3 +1,5 @@
+require 'base64'
+
 module HTTP2
   # HTTP 2.0 server connection class that implements appropriate header
   # compression / decompression algorithms and stream management logic.
@@ -28,6 +30,26 @@ module HTTP2
       @remote_role  = :client
 
       super
+    end
+
+    # handle HTTP 1.1 Upgrade connections by responding with stream 1
+    #
+    # @param headers [Hash] request headers including H2 pseudo-headers
+    # @param settings [String] HTTP2-Settings header value
+    #
+    def upgrade_stream(**args)
+
+      # convenience convert
+      args[:headers] = args[:headers].to_a if Hash === args[:headers]
+
+      # parse settings
+      buf = Buffer.new Base64.decode64(args.delete(:settings))
+      payload = Framer.frame_settings(buf.length, buf)
+      self.settings(payload)
+
+      # fire up the stream
+      new_stream **args.merge(upgrade: true)
+
     end
 
     private
