@@ -1,7 +1,4 @@
 require_relative 'helper'
-require 'http_parser'
-require 'base64'
-require 'pry'
 
 options = { port: 8080 }
 OptionParser.new do |opts|
@@ -28,77 +25,9 @@ if options[:secure]
   server = OpenSSL::SSL::SSLServer.new(server, ctx)
 end
 
-class UpgradeHandler
-
-  VALID_UPGRADE_METHODS = %w[GET OPTIONS]
-  UPGRADE_RESPONSE = ("HTTP/1.1 101 Switching Protocols\n" +
-                      "Connection: Upgrade\n" +
-                      "Upgrade: h2c\n\n").freeze
-
-  attr_reader :complete, :headers, :parsing
-
-  def initialize conn, sock
-    @conn, @sock = conn, sock
-    @complete, @parsing = false, false
-    @parser = ::HTTP::Parser.new(self)
-  end
-
-  def <<(data)
-    @parsing ||= true
-    @parser << data
-    if complete
-
-      @sock.write UPGRADE_RESPONSE
-
-      # The first HTTP/2 frame sent by the server MUST be a server connection
-      # preface (Section 3.5) consisting of a SETTINGS frame (Section 6.5).
-      # https://tools.ietf.org/html/rfc7540#section-3.2
-      #
-      buf = HTTP2::Buffer.new Base64.decode64(headers['HTTP2-Settings'])
-      settings = @conn.framer.generate type: :settings,
-                                       flags: [],
-                                       stream: 0,
-                                       payload: HTTP2::Framer.frame_settings(buf.length, buf)
-
-      # pretend this happened :)
-      #
-      @conn << HTTP2::CONNECTION_PREFACE_MAGIC
-
-      # fake it out with a full settings frame, built above from the
-      # HTTP2-Settings header value
-      #
-      @conn << settings
-
-      # still have to respond to the original req with stream 0
-      #
-      h = {
-        ':scheme'    => 'http',
-        ':method'    => @parser.http_method,
-        ':authority' => headers['Host'],
-        ':path'      => @parser.request_url
-      }
-      @conn.new_stream upgrade: true, headers: h.to_a
-
-    end
-  end
-
-  def complete!; @complete = true; end
-
-  def on_headers_complete(headers)
-    @headers = headers
-  end
-
-  def on_message_complete
-    raise unless VALID_UPGRADE_METHODS.include?(@parser.http_method)
-    @parsing = false
-    complete!
-  end
-
-end
-
 loop do
   sock = server.accept
-  puts "\n\nNew TCP connection!"
+  puts 'New TCP connection!'
 
   conn = HTTP2::Server.new
   conn.on(:frame) do |bytes|
@@ -116,8 +45,8 @@ loop do
     log = Logger.new(stream.id)
     req, buffer = {}, ''
 
-    stream.on(:active) { log.info 'client opened new stream' }
-    stream.on(:close) { log.info 'stream closed' }
+    stream.on(:active) { log.info 'cliend opened new stream' }
+    stream.on(:close)  { log.info 'stream closed' }
 
     stream.on(:headers) do |h|
       req = Hash[*h.flatten]
@@ -133,18 +62,12 @@ loop do
       log.info 'client closed its end of the stream'
 
       response = nil
-      case req[':method']
-      when 'POST'
+      if req[':method'] == 'POST'
         log.info "Received POST request, payload: #{buffer}"
         response = "Hello HTTP 2.0! POST payload: #{buffer}"
-      when 'GET'
+      else
         log.info 'Received GET request'
         response = 'Hello HTTP 2.0! GET request'
-      when 'OPTIONS'
-        log.info 'Received OPTIONS request'
-        response = 'continue in h2c'
-      else
-        log.info req
       end
 
       stream.headers({
@@ -159,36 +82,14 @@ loop do
     end
   end
 
-  uh = UpgradeHandler.new(conn, sock)
-
   while !sock.closed? && !(sock.eof? rescue true) # rubocop:disable Style/RescueModifier
     data = sock.readpartial(1024)
     # puts "Received bytes: #{data.unpack("H*").first}"
 
     begin
-      destination = case
-                    when !uh.parsing && !uh.complete
-
-                      if data.start_with?(*UpgradeHandler::VALID_UPGRADE_METHODS)
-                        uh
-                      else
-                        uh.complete!
-                        conn
-                      end
-
-                    when uh.parsing && !uh.complete
-                      uh
-
-                    when uh.complete
-                      conn
-
-                    end
-
-      destination << data
-
+      conn << data
     rescue => e
       puts "Exception: #{e}, #{e.message} - closing socket."
-      puts e.backtrace
       sock.close
     end
   end
