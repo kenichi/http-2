@@ -71,8 +71,6 @@ module HTTP2
     # are not counted towards the stream limit).
     attr_reader :active_stream_count
 
-    attr_reader :framer
-
     # Initializes new connection object.
     #
     def initialize(**settings)

@@ -32,7 +32,8 @@ module HTTP2
       super
     end
 
-    # handle HTTP 1.1 Upgrade connections by responding with stream 1
+    # handle HTTP 1.1 Upgrade connections by responding with stream 1, see
+    # `example/celluloid_server.rb`.
     #
     # @param headers [Hash] request headers including H2 pseudo-headers
     # @param settings [String] HTTP2-Settings header value
