@@ -14,6 +14,8 @@ include HTTP2
 include HTTP2::Header
 include HTTP2::Error
 
+Bundler.require :default, :test
+
 DATA = {
   type: :data,
   flags: [:end_stream].freeze,
@@ -127,3 +129,13 @@ def set_stream_id(bytes, id)
 
   head.pack(scheme) + bytes
 end
+
+def truncate_keys(hash)
+  hash.each do |k,v|
+    case v
+    when String, HTTP2::Buffer
+      hash[k] = v.to_s[0,29] + '...' if v.length > 32
+    end
+  end
+end
+
