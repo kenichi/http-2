@@ -378,6 +378,44 @@ RSpec.describe HTTP2::Stream do
         end
       end
 
+      it 'should not transition to closed if END_STREAM flag is sent when overflowing window' do
+        # initial close handler, we shouldn't close until send_buffer is empty
+        @stream.on(:close) do
+          sb = @stream.instance_variable_get :@send_buffer
+          fail "should not have closed - Stream's @send_buffer: #{sb.inspect}"
+        end
+
+        # max frame size is 16k, so let's chunk up 65,536 worth, we should exceed the
+        # default window, add the :end_stream flag to final frame
+        data = { type: :data, flags: [], stream: @stream.id }
+        4.times do
+          data = data.merge(flags: [:end_stream]) if @stream.remote_window < 16_384
+          @stream.send data.merge(payload: 'x' * 16_384)
+        end
+      end
+
+      it 'should transition to closed when send buffer is emptied' do
+        # expect close to be called when a window update of sufficient size is received
+        o = Object.new
+        expect(o).to receive(:tap).once
+        @stream.on(:close) do
+          sb = @stream.instance_variable_get :@send_buffer
+          expect(sb).to be_empty
+          o.tap
+        end
+
+        # max frame size is 16k, so let's chunk up 65,536 worth, we should exceed the
+        # default window, add the :end_stream flag to final frame
+        data = { type: :data, flags: [], stream: @stream.id }
+        4.times do
+          data = data.merge(flags: [:end_stream]) if @stream.remote_window < 16_384
+          @stream.send data.merge(payload: 'x' * 16_384)
+        end
+
+        # should trigger emptying of @stream's send_buffer
+        @client << framer.generate(type: :window_update, stream: @stream.id, increment: 16_384)
+      end
+
       it 'should transition to closed if RST_STREAM is sent' do
         @stream.close
         expect(@stream.state).to eq :closed
