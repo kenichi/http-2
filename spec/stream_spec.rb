@@ -399,8 +399,7 @@ RSpec.describe HTTP2::Stream do
         o = Object.new
         expect(o).to receive(:tap).once
         @stream.on(:close) do
-          sb = @stream.instance_variable_get :@send_buffer
-          expect(sb).to be_empty
+          expect(@stream.buffered_amount).to eq 0
           o.tap
         end
 
@@ -413,7 +412,7 @@ RSpec.describe HTTP2::Stream do
         end
 
         # should trigger emptying of @stream's send_buffer
-        @client << framer.generate(type: :window_update, stream: @stream.id, increment: 16_384)
+        @client << Framer.new.generate(type: :window_update, stream: @stream.id, increment: 16_384)
       end
 
       it 'should transition to closed if RST_STREAM is sent' do

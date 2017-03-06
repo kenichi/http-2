@@ -313,11 +313,12 @@ module HTTP2
             if (stream = @streams[frame[:stream]])
               stream << frame
             else
+              case frame[:type]
               # The PRIORITY frame can be sent for a stream in the "idle" or
               # "closed" state. This allows for the reprioritization of a
               # group of dependent streams by altering the priority of an
               # unused or closed parent stream.
-              if frame[:type] == :priority
+              when :priority
                 stream = activate_stream(
                   id:         frame[:stream],
                   weight:     frame[:weight] || DEFAULT_WEIGHT,
@@ -327,6 +328,9 @@ module HTTP2
 
                 emit(:stream, stream)
                 stream << frame
+
+              when :window_update
+                process_window_update(frame)
               else
                 # An endpoint that receives an unexpected stream identifier
                 # MUST respond with a connection error of type PROTOCOL_ERROR.
@@ -679,6 +683,10 @@ module HTTP2
       msg ||= e && e.message
       backtrace = (e && e.backtrace) || []
       fail Error.const_get(klass), msg, backtrace
+    end
+
+    def manage_state(frame)
+      yield
     end
   end
 end
